@@ -1,0 +1,11 @@
+.DS_Store
+build/
+*.o
+*.out
+*.exe
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+cmake-build-*/
