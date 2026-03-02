@@ -17,73 +17,51 @@
 
 ### 基础篇
 
-- **01-basics/** - 函数式编程基础概念
-  - 什么是函数式编程
-  - C++ 中的函数式特性
-  - Lambda 表达式和闭包
+- **01-functions/** - Lambda 表达式、闭包、std::function、泛型 lambda
+- **02-immutability/** - const 正确性、constexpr、不可变类设计
+- **03-pure-functions/** - 纯函数、副作用隔离、引用透明性
+- **04-higher-order-functions/** - map/filter/reduce、STL 算法、函数作为参数和返回值
 
-- **02-immutability/** - 不可变性
-  - const 的正确用法
-  - 不可变数据结构
-  - 为什么可变状态是万恶之源
+### 核心技术
 
-- **03-pure-functions/** - 纯函数
-  - 纯函数定义和好处
-  - 副作用隔离
-  - 引用透明性
+- **05-currying-partial/** - 柯里化模板、std::bind、偏应用、配置工厂
+- **06-composition/** - compose/pipe、组合子、point-free 风格
+- **07-ranges/** - C++20 Ranges、views 管道语法、惰性求值
 
-### 核心篇
+### 类型驱动设计
 
-- **04-higher-order-functions/** - 高阶函数
-  - 函数作为一等公民
-  - map/filter/reduce 实现
-  - 函数柯里化和偏应用
+- **08-algebraic-types/** - std::variant、std::optional、模式匹配、状态机
+- **09-error-handling/** - Result 类型、std::expected (C++23)、异常 vs 返回值
 
-- **05-functional-composition/** - 函数组合
-  - pipe 和 compose
-  - 数据流转换
-  - 点自由风格（point-free）
+### 进阶模式
 
-- **06-algebraic-types/** - 代数数据类型
-  - Sum types（std::variant）
-  - Product types（std::tuple）
-  - Pattern matching
+- **10-functors-monads/** - fmap、bind、Maybe/Result monad、monad 定律
+- **11-lazy-memoization/** - Lazy\<T\>、memoize、无限序列
+- **12-capstone/** - 构建一个内存数据查询 DSL（领域特定语言）
 
-### 进阶篇
+特别说明 : 原书实战项目为 **actor模型设计** ,本教程为 **DSL**
 
-- **07-monads/** - Monad 模式
-  - Optional/Maybe monad
-  - Result/Either monad
-  - IO monad 概念
+### 项目实战
 
-- **08-advanced-patterns/** - 高级模式
-  - Functor, Applicative
-  - 懒求值（lazy evaluation）
-  - 递归和尾调用优化
-
-### 实践
-
-- **examples/** - 示例代码
-  - `basic/` - 基础示例
-  - `intermediate/` - 中级示例
-  - `advanced/` - 高级示例
-
-- **exercises/** - 练习题
-  - `solutions/` - 参考答案
-  - `tests/` - 单元测试
+- [FunServe](https://github.com/wzxzhuxi/FunServe) - 使用本教程所学的函数式编程技术构建的实战项目
 
 ## 环境要求
 
-- C++17 或更高（推荐 C++20）
-- 支持的编译器：GCC 10+, Clang 12+, MSVC 2019+
-- CMake 3.15+
+- C++20 或更高（推荐 C++23）
+- 编译器：GCC 10+, Clang 12+, MSVC 2019+
+- CMake 3.20+
 
 ## 编译
 
 ```bash
-mkdir build && cd build
-cmake ..
-make
+cmake -S . -B build
+cmake --build build
+
+# 编译单个目标（格式：<章节目录>_<文件名>）
+cmake --build build --target 01-functions_01_lambdas
+
+# 运行
+./build/bin/01-functions_01_lambdas
 ```
 
 ## 学习路径
