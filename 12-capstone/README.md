@@ -18,11 +18,13 @@
 ```cpp
 auto query = from(users)
     | where([](const User& u) { return u.age >= 18; })
-    | select(&User::name, &User::email)
     | order_by(&User::name)
     | limit(10);
 
 auto results = query.execute();
+
+// select 是自由函数，对查询结果做投影
+auto names = select(query, &User::name);
 ```
 
 ## 核心组件
@@ -129,9 +131,10 @@ auto results = query.execute();
 编译时检查类型错误：
 
 ```cpp
-auto query = from(users)
-    | select(&User::name)           // 结果类型变为 string
-    | where([](const User& u) {});  // 编译错误！类型不匹配
+// select 返回的是投影结果，不再是 Query<User>
+auto names = select(query, &User::name);  // vector<string>
+
+// 对 names 继续用 where<User> 会编译错误：类型不匹配
 ```
 
 ### 组合性
@@ -182,9 +185,9 @@ public:
     [[nodiscard]] Query order_by(F projection, bool ascending = true) const {
         auto comp = [projection, ascending](const T& a, const T& b) {
             if (ascending) {
-                return projection(a) < projection(b);
+                return std::invoke(projection, a) < std::invoke(projection, b);
             }
-            return projection(a) > projection(b);
+            return std::invoke(projection, a) > std::invoke(projection, b);
         };
         return Query(source_, predicates_, comp, limit_count_);
     }
@@ -233,20 +236,43 @@ Query<T> from(std::vector<T> source) {
     return Query<T>(std::move(source));
 }
 
-// 管道辅助类
-template<typename T>
-struct WhereOp {
-    std::function<bool(const T&)> pred;
-};
+// 管道辅助类：用模板参数存储任意可调用对象，
+// T 延迟到 operator| 时从 Query<T> 推导
+template<typename F>
+struct WhereOp { F pred; };
 
-template<typename T>
-WhereOp<T> where(std::function<bool(const T&)> pred) {
-    return WhereOp<T>{std::move(pred)};
+template<typename F>
+WhereOp<F> where(F pred) {
+    return {std::move(pred)};
 }
 
-template<typename T>
-Query<T> operator|(Query<T> query, WhereOp<T> op) {
+template<typename T, typename F>
+Query<T> operator|(Query<T> query, WhereOp<F> op) {
     return query.where(std::move(op.pred));
+}
+
+// order_by 管道
+template<typename F>
+struct OrderByOp { F projection; bool ascending = true; };
+
+template<typename F>
+OrderByOp<F> order_by(F projection, bool ascending = true) {
+    return {std::move(projection), ascending};
+}
+
+template<typename T, typename F>
+Query<T> operator|(Query<T> query, OrderByOp<F> op) {
+    return query.order_by(std::move(op.projection), op.ascending);
+}
+
+// limit 管道
+struct LimitOp { size_t count; };
+
+inline LimitOp limit(size_t n) { return {n}; }
+
+template<typename T>
+Query<T> operator|(Query<T> query, LimitOp op) {
+    return query.limit(op.count);
 }
 ```
 
@@ -256,14 +282,16 @@ Query<T> operator|(Query<T> query, WhereOp<T> op) {
 
 ```cpp
 template<typename T, typename F>
-auto select(Query<T> query, F projection) {
-    using U = std::invoke_result_t<F, const T&>;
+auto select(const Query<T>& query, F projection) {
+    // decay_t 剥离引用：invoke_result_t 对成员指针返回引用类型，
+    // 例如 &User::name → const string&，不能放进 vector
+    using U = std::decay_t<std::invoke_result_t<F, const T&>>;
     auto results = query.execute();
 
     std::vector<U> projected;
     projected.reserve(results.size());
     for (const auto& item : results) {
-        projected.push_back(projection(item));
+        projected.push_back(std::invoke(projection, item));
     }
     return projected;
 }
@@ -272,14 +300,12 @@ auto select(Query<T> query, F projection) {
 ### group_by：分组
 
 ```cpp
-template<typename T, typename K>
-std::map<K, std::vector<T>> group_by(
-    const std::vector<T>& data,
-    std::function<K(const T&)> key_fn
-) {
+template<typename T, typename F>
+auto group_by(const std::vector<T>& data, F key_fn) {
+    using K = std::decay_t<std::invoke_result_t<F, const T&>>;
     std::map<K, std::vector<T>> groups;
     for (const auto& item : data) {
-        groups[key_fn(item)].push_back(item);
+        groups[std::invoke(key_fn, item)].push_back(item);
     }
     return groups;
 }
@@ -296,16 +322,17 @@ struct Aggregates {
 
     template<typename F>
     static auto sum(const std::vector<T>& data, F field) {
-        using R = std::invoke_result_t<F, const T&>;
+        using R = std::decay_t<std::invoke_result_t<F, const T&>>;
         R total{};
         for (const auto& item : data) {
-            total += field(item);
+            total += std::invoke(field, item);
         }
         return total;
     }
 
     template<typename F>
     static auto avg(const std::vector<T>& data, F field) {
+        if (data.empty()) return 0.0;
         return static_cast<double>(sum(data, field)) / count(data);
     }
 };

@@ -262,12 +262,19 @@ auto result = parse_int("10")
 ### List Monad
 
 ```cpp
-// 每个元素可能产生多个结果
+// 简化的 List Monad（仅展示核心 bind 操作）
 template<typename T>
 class List {
-    std::vector<T> data_;
-
 public:
+    using value_type = T;
+
+    List() = default;
+    List(std::initializer_list<T> init) : data_(init) {}
+    explicit List(std::vector<T> v) : data_(std::move(v)) {}
+
+    auto begin() const { return data_.begin(); }
+    auto end() const { return data_.end(); }
+
     // bind: 对每个元素应用函数，展平结果
     template<typename F>
     [[nodiscard]] auto bind(F f) const {
@@ -277,15 +284,18 @@ public:
             auto sub = f(x);
             result.insert(result.end(), sub.begin(), sub.end());
         }
-        return List<U>{std::move(result)};
+        return List<U>(std::move(result));
     }
+
+private:
+    std::vector<T> data_;
 };
 
 // 使用：生成所有可能组合
-auto pairs = List<int>{{1, 2}}.bind([](int x) {
-    return List<std::pair<int, char>>{{
+auto pairs = List<int>{1, 2}.bind([](int x) {
+    return List<std::pair<int, char>>{
         {x, 'a'}, {x, 'b'}
-    }};
+    };
 });
 // pairs = [(1,'a'), (1,'b'), (2,'a'), (2,'b')]
 ```

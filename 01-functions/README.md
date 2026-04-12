@@ -10,7 +10,7 @@
 - 正确处理闭包和变量捕获
 - 知道 `auto` lambda 和 `std::function` 的区别
 
-## 为什么函数式编程
+## 什么是函数式编程
 
 先看两段代码，做同样的事情——求偶数之和：
 
@@ -73,6 +73,12 @@ auto f3 = [=](int x) { return x * factor; };
 
 // 捕获所有（引用）- 危险，尽量避免
 auto f4 = [&](int x) { return x * factor; };
+
+// 捕获所有（值），但值捕获 factor
+auto f5 = [=, &factor](int x) { return x * factor; };
+
+// 捕获所有（引用）, 但引用捕获 factor
+auto f6 = [&, factor](int x) { return x * factor; };
 ```
 
 **黄金法则**：优先使用**值捕获**，除非你确定引用的生命周期。

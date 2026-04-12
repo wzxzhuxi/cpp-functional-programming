@@ -200,10 +200,11 @@ int bad_calculate(int x, int y) {
 ```cpp
 // 纯函数：所有业务逻辑
 [[nodiscard]] std::vector<int> process(const std::vector<int>& data) {
-    return data
+    auto view = data
         | std::views::filter([](int x) { return x > 0; })
-        | std::views::transform([](int x) { return x * 2; })
-        | std::ranges::to<std::vector>();
+        | std::views::transform([](int x) { return x * 2; });
+    return {view.begin(), view.end()};  // C++20 兼容的收集方式
+    // C++23 可用: | std::ranges::to<std::vector>()
 }
 
 // 不纯：只负责 I/O

@@ -112,9 +112,11 @@ public:
         if constexpr (std::is_invocable_v<F, CapturedArgs..., Arg>) {
             return std::apply(f_, new_args);
         } else {
-            return Curried<F, CapturedArgs..., Arg>(
-                f_, std::get<CapturedArgs>(captured_)..., arg
-            );
+            return std::apply([&](auto&&... args) {
+                return Curried<F, CapturedArgs..., Arg>(
+                    f_, std::forward<decltype(args)>(args)..., arg
+                );
+            }, captured_);
         }
     }
 };
@@ -161,7 +163,7 @@ powers_of_2(10);  // 2¹⁰ = 1024
 curry_add(1)(2)(3);  // 必须一个一个传
 
 // 偏应用：可以一次固定多个
-auto add_to_10 = partial2(add, 1, 2);  // 固定前两个
+auto add_to_10 = partial_n(add, 1, 2);  // 固定前两个
 add_to_10(7);  // 1 + 2 + 7 = 10
 ```
 
@@ -181,16 +183,11 @@ times5(10);  // 50
 // 固定第二个参数
 auto double_it = std::bind(multiply, std::placeholders::_1, 2);
 double_it(7);  // 14
-
-// 交换参数顺序
-auto divide = [](double a, double b) { return a / b; };
-auto inv_divide = std::bind(divide, std::placeholders::_2, std::placeholders::_1);
-inv_divide(2, 10);  // 10 / 2 = 5
 ```
 
 ### std::bind 的问题
 
-1. **可读性差**：`_1`, `_2` 不直观
+1. **可读性差**：哪怕只是固定第二个参数，也要先读懂 `_1`, `_2`
 2. **类型擦除**：返回复杂类型
 3. **性能开销**：可能有间接调用
 
@@ -292,17 +289,7 @@ is_valid_score(105); // false
 ### 字符串格式化
 
 ```cpp
-auto make_formatter = curry2([](std::string prefix, std::string suffix) {
-    return [prefix, suffix](std::string content) {
-        return prefix + content + suffix;
-    };
-});
-
-auto html_tag = make_formatter("<");
-auto bold = html_tag("b>")(std::string("</b>"));
-auto italic = html_tag("i>")(std::string("</i>"));
-
-// 使用闭包更灵活
+// 闭包工厂：标签名 → 包装函数
 auto tag = [](std::string name) {
     return [name](std::string content) {
         return "<" + name + ">" + content + "</" + name + ">";
@@ -314,6 +301,22 @@ auto italic = tag("i");
 
 bold("Hello");    // "<b>Hello</b>"
 italic("World");  // "<i>World</i>"
+```
+
+柯里化更适合参数能直接映射到 prefix/suffix 的场景：
+
+```cpp
+auto wrap = curry2([](std::string open, std::string close) {
+    return [open, close](std::string content) {
+        return open + content + close;
+    };
+});
+
+auto parens = wrap("(")(")");
+auto brackets = wrap("[{")("}]");
+
+parens("hello");    // "(hello)"
+brackets("1, 2");   // "[{1, 2}]"
 ```
 
 ## 最佳实践

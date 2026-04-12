@@ -2,6 +2,8 @@
 
 > "Talk is cheap. Show me the code."
 
+## 视频链接:[C++ 函数式编程](https://www.bilibili.com/video/BV1zS97BnEma)
+
 ## 概述
 
 这是一个使用 C++ 进行函数式编程的实战教程。不搞虚的，直接上代码。

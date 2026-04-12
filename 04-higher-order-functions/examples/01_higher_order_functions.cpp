@@ -79,7 +79,11 @@ template<typename T, typename F>
 template<typename T, typename Pred>
 [[nodiscard]] std::vector<T> filter(const std::vector<T>& vec, Pred pred) {
     std::vector<T> result;
-    std::copy_if(vec.begin(), vec.end(), std::back_inserter(result), pred);
+    for (const auto& item : vec) {
+        if (pred(item)) {
+            result.push_back(item);
+        }
+    }
     return result;
 }
 

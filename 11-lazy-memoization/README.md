@@ -164,6 +164,31 @@ auto result = expensive
 
 记忆化是缓存函数调用结果的技术，避免重复计算。
 
+### 惰性求值 vs 记忆化
+
+这两个概念经常一起出现，因为它们都在做同一类事：**减少不必要的重复工作**。
+
+- **惰性求值**：先不算，等真正需要时再算
+- **记忆化**：一旦算过，就把结果记住，下次直接复用
+
+它们的差别不在“有没有缓存”，而在“缓存的对象是什么”：
+
+- `Lazy<T>` 缓存的是**一个延迟表达式**的结果
+- `memoize(f)` 缓存的是**函数在不同参数下**的结果
+
+```cpp
+auto x = lazy([] { return expensive(); });
+x.get();  // 第一次才计算
+x.get();  // 命中同一个缓存槽
+
+auto square = memoize<int, int>([](int n) { return n * n; });
+square(5);  // 计算参数 5
+square(5);  // 命中参数 5 的缓存
+square(8);  // 这是另一条缓存记录
+```
+
+所以可以把 `Lazy<T>` 看成“**零参数函数的记忆化**”：它只有一个待求值表达式，因此只需要一个缓存槽；而普通 `memoize` 需要一个按参数索引的缓存表。
+
 ### 基本实现
 
 ```cpp
@@ -242,43 +267,67 @@ int fib_cached(int n) {
 ```cpp
 template<typename T>
 class LazyList {
-public:
-    using Generator = std::function<std::pair<T, LazyList>()>;
+    // 用 shared_ptr 打断递归：LazyList 在定义体内是不完整类型，
+    // 不能直接放进 pair，但 shared_ptr<LazyList> 大小已知
+    struct Cell {
+        T head;
+        std::shared_ptr<LazyList> tail;
+    };
 
-private:
-    Lazy<std::optional<std::pair<T, LazyList>>> cell_;
+    Lazy<std::optional<Cell>> cell_;
+
+    explicit LazyList(Lazy<std::optional<Cell>> cell)
+        : cell_(std::move(cell)) {}
 
 public:
     // 空列表
     static LazyList empty() {
-        return LazyList(lazy([] { return std::nullopt; }));
-    }
-
-    // 构造
-    static LazyList cons(T head, LazyList tail) {
-        return LazyList(lazy([head, tail] {
-            return std::make_optional(std::make_pair(head, tail));
+        return LazyList(lazy([]() -> std::optional<Cell> {
+            return std::nullopt;
         }));
     }
 
-    // 生成无限列表
+    // 构造：头 + 惰性尾
+    static LazyList cons(T head, Lazy<LazyList> tail) {
+        return LazyList(lazy([head = std::move(head), tail]() -> std::optional<Cell> {
+            return Cell{head, std::make_shared<LazyList>(tail.get())};
+        }));
+    }
+
+    // 生成无限列表（完全惰性，不在构造时求值）
     static LazyList iterate(T start, std::function<T(T)> next) {
         return cons(start, lazy([=] {
             return iterate(next(start), next);
-        }).get());
+        }));
     }
 
     // 获取前 n 个元素
     std::vector<T> take(int n) const {
         std::vector<T> result;
-        LazyList current = *this;
+        const LazyList* current = this;
+        std::shared_ptr<LazyList> holder;
         for (int i = 0; i < n; ++i) {
-            auto cell = current.cell_.get();
+            auto& cell = current->cell_.get();
             if (!cell) break;
-            result.push_back(cell->first);
-            current = cell->second;
+            result.push_back(cell->head);
+            holder = cell->tail;
+            current = holder.get();
         }
         return result;
+    }
+
+    // 惰性过滤
+    static LazyList filter(std::function<bool(T)> pred, LazyList list) {
+        return LazyList(lazy([=]() -> std::optional<Cell> {
+            auto& cell = list.cell_.get();
+            if (!cell) return std::nullopt;
+
+            if (pred(cell->head)) {
+                auto tail = filter(pred, *cell->tail);
+                return Cell{cell->head, std::make_shared<LazyList>(std::move(tail))};
+            }
+            return filter(pred, *cell->tail).cell_.get();
+        }));
     }
 };
 
@@ -290,18 +339,12 @@ auto first10 = naturals.take(10);  // {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 ### 惰性过滤
 
 ```cpp
-template<typename T>
-LazyList<T> filter(std::function<bool(T)> pred, LazyList<T> list) {
-    return lazy([=] {
-        auto cell = list.cell_.get();
-        if (!cell) return LazyList<T>::empty();
-
-        if (pred(cell->first)) {
-            return LazyList<T>::cons(cell->first, filter(pred, cell->second));
-        }
-        return filter(pred, cell->second);
-    }).get();
-}
+// filter 已内置为 LazyList 的静态成员，用法：
+auto evens = LazyList<int>::filter(
+    [](int n) { return n % 2 == 0; },
+    naturals
+);
+auto first5Evens = evens.take(5);  // {0, 2, 4, 6, 8}
 
 // 使用：无限素数列表
 auto primes = /* 埃拉托斯特尼筛法的惰性版本 */;

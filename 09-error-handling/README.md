@@ -66,31 +66,9 @@ if (result.is_ok()) {
 }
 ```
 
-## std::optional：表达"可能没有"
+## std::optional：从"可能没有"到错误处理
 
-### 基本用法
-
-```cpp
-#include <optional>
-
-std::optional<int> find_first_even(const std::vector<int>& nums) {
-    for (int n : nums) {
-        if (n % 2 == 0) return n;
-    }
-    return std::nullopt;  // 明确表示"没有"
-}
-
-// 使用
-auto result = find_first_even({1, 3, 5});
-if (result) {
-    std::cout << "Found: " << *result << "\n";
-} else {
-    std::cout << "Not found\n";
-}
-
-// 或使用 value_or
-int value = result.value_or(-1);
-```
+我们在 [Ch08 - 代数数据类型](../08-algebraic-types/README.md) 中学过 `optional` 的基本用法（构造、`nullopt`、`if(result)` 检查等）。现在来看它在错误处理中的角色。
 
 ### optional 的局限
 
@@ -116,18 +94,17 @@ template<typename T, typename E>
 class Result {
     std::variant<T, E> data_;
 
+    // 私有构造：直接接收已构造的 variant
+    explicit Result(std::variant<T, E> data) : data_(std::move(data)) {}
+
 public:
-    // 工厂函数
+    // 工厂函数（不要求 T/E 默认可构造）
     static Result ok(T value) {
-        Result r;
-        r.data_ = std::move(value);
-        return r;
+        return Result(std::variant<T, E>(std::in_place_index<0>, std::move(value)));
     }
 
     static Result err(E error) {
-        Result r;
-        r.data_.template emplace<1>(std::move(error));
-        return r;
+        return Result(std::variant<T, E>(std::in_place_index<1>, std::move(error)));
     }
 
     // 查询
