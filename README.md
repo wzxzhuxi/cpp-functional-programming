@@ -45,7 +45,7 @@
 
 ### 项目实战
 
-- [FunServe](https://github.com/wzxzhuxi/FunServe) - 使用本教程所学的函数式编程技术构建的实战项目
+- [Rain](https://github.com/wzxzhuxi/Rain) - 使用本教程所学的函数式编程技术构建的实战项目
 
 ## 环境要求
 
